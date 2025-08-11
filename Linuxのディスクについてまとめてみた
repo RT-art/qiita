@@ -82,3 +82,5 @@ sudo lvextend -l +100%FREE /dev/mapper/ol-root
      sudo xfs_growfs /
 
 既存のボリューム拡張の際は、マウントは必要ない
+
+---
