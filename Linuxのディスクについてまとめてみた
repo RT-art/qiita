@@ -84,3 +84,4 @@ sudo lvextend -l +100%FREE /dev/mapper/ol-root
 既存のボリューム拡張の際は、マウントは必要ない
 
 ---
+gi 以上、下書き。
