@@ -1,66 +1,46 @@
-# CSVを置くだけでEC2を自動構築！AWS SAMで作る、コマンド一発の使い捨て検証環境。
-
 ## はじめに
 
-「個人学習でEC2を気軽に立てては壊したい」って時、ありますよね。この記事は、そうした手間をなくし「CSVを編集してコマンドを叩くだけ」で検証環境が手に入るようにしたサーバレスアプリケーションの紹介です。
-
-実際にこの仕組みを使ってみると、コマンド一つで環境がまっさらな状態から立ち上がる手軽さが想像以上に快適で、学習が捗ったので共有します。
+「個人学習でEC2を気軽に立てては壊したい」って時、ありますよね。
+この記事は、エンジニア見習いでも簡単に編集できるCSVファイルで、検証環境が手に入るようにしたサーバレスアプリケーションの紹介です。
 
 **[GitHubリポジトリへのリンク](https://github.com/RT-art/csv-to-ec2.git)** 
 
 ## プロジェクトの概要とアーキテクチャ
 
-このプロジェクトは、`manage.sh`という管理スクリプトを実行するだけで、必要なAWSリソース一式をデプロイし、CSVをアップロードするだけでEC2を起動できます。
+シェル1コマンド実行するだけで、必要なAWSリソース一式(VPC,Subnet,s3,Lambda等)をデプロイ。
+CSVをアップロードするだけでEC2を起動できます。
 
 ![アーキテクチャ図](https://github.com/RT-art/csv-to-ec2/raw/main/images/%E3%82%A2%E3%83%BC%E3%82%AD%E3%83%86%E3%82%AF%E3%83%81%E3%83%A3%E5%9B%B3.png)
 
-1.  **`./manage.sh deploy`**: AWS SAMを使い、`template.yaml` に定義されたリソース（VPC、サブネット、S3バケット、IAMロール、Lambda関数など）をCloudFormationスタックとして一括デプロイします。
-2.  **CSV Upload**: ユーザーが作成したいEC2の `ami_id` と `instance_type` を記述したCSVファイルをS3バケットにアップロードします。
-3.  **Lambda Trigger**: S3へのファイルアップロードをイベントトリガーとして、Lambda関数が自動的に実行されます。
-4.  **EC2 Launch**: Lambda関数がCSVファイルの中身を読み取り、行ごとにEC2インスタンスを作成します。インスタンスにはSSM接続用のプロファイルが付与され、どのスタックから作成されたかのタグも自動で付与されます。
-5.  **`./manage.sh delete`**: 作成したEC2インスタンスと、CloudFormationスタックでデプロイしたすべてのリソースを完全に削除します。
-
-## このプロジェクトの便利なところ
-
-### 1\. コマンド一発での「完全な構築」と「完全な削除」
-
-`manage.sh`スクリプトにより、AWSの操作に慣れていない人でも**たった1コマンドで環境を構築・削除できます。** これにより、学習や検証のために「ちょっと試してすぐ消す」というサイクルを高速で回すことが可能になります。
-
-### 2\. IaCによる再現性と保守性
-
-インフラ構成をすべてAWS SAM (`template.yaml`) でコード化しています。これにより、誰が実行しても同じ環境を正確に再現できます。構成の変更もコードを修正するだけなので、バージョン管理も容易です。
-
-### 3\. イベント駆動型のシンプルなアーキテクチャ
-
-「S3へのアップロード」という直感的なアクションをトリガーに処理が動く、シンプルで実用的な設計です。過剰な機能は削ぎ落とし、コアな要件を満たすことに集中しました。
-
-### 4. 気が利く管理スクリプト
-`manage.sh`は単にSAMコマンドをラップするだけではありません。
-
-- `deploy`後は、後続の`upload`コマンドで必要になる**S3バケット名を自動で`.sam_outputs`ファイルに保存**します。
-- `upload`時は、引数がなければ**カレントディレクトリのCSVファイルを自動で探し出して**アップロードします。
-- `delete`時は、EC2インスタンスやS3バケットの中身を**事前にクリーンアップ**してからスタックを削除するため、エラーなく確実に環境を削除できます。
-
-このように、ユーザーがスムーズに使えるように細部まで作り込まれています。
-
 ## 使い方
+レポジトリをクローン
+↓
+必須ツールをインストール（AWS CLI、AWSSAMCLI、Python3.12）
+↓
+deployコマンドを打つ
+↓
+s3 pushコマンドを打つ
+↓
+完成
+
+deleteコマンドで作成したすべてのAWSリソースを一括削除
+
 
 ### 1\. 初期設定 (初回のみ)
 
 #### プロジェクトのダウンロード
 
-まず、GitHubからプロジェクトファイルをダウンロードします。ターミナルで以下のコマンドを実行してください。
+ターミナルで以下のコマンドを実行してください。
 
-**HTTPS接続の場合:**
 ```bash
-git clone [https://github.com/RT-art/csv-to-ec2.git](https://github.com/RT-art/csv-to-ec2.git)
+git clone https://github.com/RT-art/csv-to-ec2.git
 cd csv-to-ec2
 ```
 
 必須ツールのインストール
 
-このプロジェクトを実行するには、AWS CLI, AWS SAM CLI, Python 3.12 が必要です。お使いのOSに合わせてインストールしてください。
-
+AWS CLI, AWS SAM CLI, Python 3.12 が必要です。お使いのOSに合わせてインストールしてください。
+※準備ができている方は、飛ばしていただいて構いません。
 #### macOS (Homebrewを使用)
 
 ターミナルを開き、以下のコマンドを実行します。
@@ -72,8 +52,24 @@ cd csv-to-ec2
 # 各ツールを一括でインストール
 brew install awscli aws-sam-cli python@3.12
 ```
+#### Windows (Git Bash等)
 
-#### Linux (Debian/Ubuntu系)
+1.  [AWS CLI公式ダウンロードページ](https://docs.aws.amazon.com/ja_jp/cli/latest/userguide/getting-started-install.html)からインストーラー（.msi）をダウンロードし、実行します。
+2.  [Python 3.12公式サイト](https://www.python.org/downloads/windows/)からインストーラーをダウンロードしてインストールします。**このとき、必ず「Add Python 3.12 to PATH」のチェックボックスをオンにしてください。**
+3.  [Git for Windows](https://git-scm.com/download/win)をインストールし、Git Bashを起動します。
+4.  Git Bash上で、pipを使いAWS SAM CLIをインストールします。
+
+    ```bash
+    pip install aws-sam-cli
+    ```
+5.  以下のコマンドで各ツールのバージョンが表示されれば成功です。
+    ```bash
+    aws --version
+    sam --version
+    python --version
+    ```
+
+#### Windows (WSL2)
 
 ターミナルを開き、以下のコマンドを順番に実行します。
 
@@ -99,91 +95,7 @@ sudo ./sam-installation/install
 rm -rf aws-sam-cli-linux-x86_64.zip sam-installation/
 ```
 
-#### Windows (WSL2 + Ubuntuを推奨)
-
-Windowsでは、WSL2 (Windows Subsystem for Linux) 上にUbuntuをインストールして利用することを推奨します。`manage.sh`はBashスクリプトであり、WSL2環境が最も親和性が高いためです。
-
-1.  PowerShellまたはコマンドプロンプトで `wsl --install -d Ubuntu` を実行し、WSL2とUbuntuをインストールします。
-2.  インストール後、Ubuntuターミナルが起動します。そこで上記の「Linux (Debian/Ubuntu系)」に記載されているコマンドをそのまま実行してください。
-
-#### Windows (WSL2が使えない方向け: Git Bash)
-
-1.  [AWS CLI公式ダウンロードページ](https://docs.aws.amazon.com/ja_jp/cli/latest/userguide/getting-started-install.html)からインストーラー（.msi）をダウンロードし、実行します。
-2.  [Python 3.12公式サイト](https://www.python.org/downloads/windows/)からインストーラーをダウンロードしてインストールします。**このとき、必ず「Add Python 3.12 to PATH」のチェックボックスをオンにしてください。**
-3.  [Git for Windows](https://git-scm.com/download/win)をインストールし、Git Bashを起動します。
-4.  Git Bash上で、pipを使いAWS SAM CLIをインストールします。
-
-    ```bash
-    pip install aws-sam-cli
-    ```
-5.  以下のコマンドで各ツールのバージョンが表示されれば成功です。
-    ```bash
-    aws --version
-    sam --version
-    python --version
-    ```
-
-```bash
-# パッケージリストを更新し、Pythonの前提パッケージをインストール
-sudo apt update
-sudo apt install -y software-properties-common
-
-# Python 3.12 をインストール (deadsnakes PPA を使用)
-sudo add-apt-repository -y ppa:deadsnakes/ppa
-sudo apt install -y python3.12
-
-# AWS CLI をインストール
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-unzip awscliv2.zip
-sudo ./aws/install
-rm -rf awscliv2.zip aws/
-
-# AWS SAM CLI をインストール
-wget https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip
-unzip aws-sam-cli-linux-x86_64.zip -d sam-installation
-sudo ./sam-installation/install
-rm -rf aws-sam-cli-linux-x86_64.zip sam-installation/
-```
-
-#### Windows (WSL2 + Ubuntu)
-
-Windowsでは、WSL2 (Windows Subsystem for Linux) 上にUbuntuをインストールして利用することを推奨します。
-
-wsl -l
-wsl.exe --install Ubuntu
-インストールプロセスが完了すると、ユーザー名とパスワードの設定を求められます。これらは、Ubuntu 環境内で使用するものです
-
-Linuxと同様の手順でインストールします。
-
-上記の Linux (Debian/Ubuntu系) に記載されているコマンドをUbuntuターミナル上で実行してください。
-
-AWS認証情報の設定
-
-ツールのインストール後、AWSアカウントに接続するための設定を行います。
-*
-#### Windows (Git Bash)
-
-Git BashはWindowsネイティブアプリを呼び出せるため、Windows版のAWS CLIをインストールします。
-
-1. [AWS CLI公式ダウンロードページ](https://docs.aws.amazon.com/ja_jp/cli/latest/userguide/getting-started-install.html)からインストーラー（.msi）をダウンロードし、実行します。
-2.  [Python 3.12公式サイト](https://www.python.org/downloads/windows/) からインストーラーをダウンロードしてインストールします。**このとき、必ず「Add Python 3.12 to PATH」のチェックボックスをオンにしてください。**
-3. Git Bashを再起動し、以下のコマンドでインストールを確認します。
-
-```bash
-aws --version
-```
-
-4. AWS SAM CLIはWindows版が提供されていないため、Python 3.12とpipがインストールされている前提で、以下のコマンドでpipからインストールします。
-
-```bash
-pip install aws-sam-cli
-```
-5. 以下のコマンドでバージョンが表示されれば成功です
-```bash
-aws --version
-sam --version
-```
-最後に、以下の設定を行う
+#### インストール後、以下設定を行う
 ```bash
 # AWSのアクセスキーとシークレットアクセスキーなどを設定
 aws configure
@@ -193,14 +105,13 @@ chmod +x manage.sh
 ```
 -------
 
-### 2\. デプロイ
+### 2\. デプロイスクリプトの実行
 
 以下のコマンドで、AWS上に必要なリソース（VPC, S3, Lambda等）を一括作成します。
 
 ```bash
 ./manage.sh deploy
 ```
-
 -----
 
 ### 3\. EC2インスタンスの作成
@@ -209,8 +120,7 @@ chmod +x manage.sh
 
 ```csv:sample.csv
 ami_id,instance_type
-ami-0dc279da1d8643e74,t2.micro # Amazon Linux 2 (例)
-ami-0c55b159cbfafe1f0,t3.small # Ubuntu Server (例)
+ami-0dc279da1d8643e74,t2.micro
 ```
 
 その後、以下のコマンドでCSVをアップロードすれば、EC2の作成が自動で開始されます。
@@ -227,7 +137,7 @@ ami-0c55b159cbfafe1f0,t3.small # Ubuntu Server (例)
 
 ### 4\. クリーンアップ
 
-作成したEC2インスタンスやVPCなど、すべてのリソースを削除します。
+作成したEC2インスタンスやVPCなど、すべてのリソースを一発で削除します。
 
 ```bash
 ./manage.sh delete
